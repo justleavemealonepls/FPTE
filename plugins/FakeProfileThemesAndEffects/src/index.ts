@@ -3,7 +3,6 @@ import { UserProfileStore, UserStore } from "@lib/stores";
 import {
     patchGetPurchase,
     patchGetUserProfile,
-    //patchGuildProfileEditForm,
     patchUseProfileEffectSections,
     patchUseProfileTheme,
     patchUserProfileEditForm,
@@ -11,12 +10,13 @@ import {
 } from "@patches";
 import { Settings } from "@ui/pages";
 
-/** Updates the profile theme and effect used by YouScreen and BottomTabBar. */
 function updateProfileThemeAndEffect() {
     const user = UserStore.getCurrentUser();
     if (!user) return;
+
     const user_profile = UserProfileStore.getUserProfile(user.id);
     if (!user_profile) return;
+
     FluxDispatcher.dispatch({
         type: "USER_PROFILE_FETCH_SUCCESS",
         user,
@@ -26,25 +26,53 @@ function updateProfileThemeAndEffect() {
 }
 
 const patches: (() => boolean)[] = [];
+let loaded = false;
 
 export default {
     onLoad() {
-        patches.push(
-            patchGetPurchase(),
-            patchGetUserProfile(),
-            //patchGuildProfileEditForm(),
-            ...patchUseProfileEffectSections(),
-            patchUseProfileTheme(),
-            patchUserProfileEditForm(),
-            patchNitroUpsellCard()
-        );
-        updateProfileThemeAndEffect();
+        if (loaded) return;
+        loaded = true;
+
+        try {
+            patches.push(
+                patchGetPurchase(),
+                patchGetUserProfile(),
+                ...patchUseProfileEffectSections(),
+                patchUseProfileTheme(),
+                patchUserProfileEditForm(),
+                patchNitroUpsellCard()
+            );
+
+            updateProfileThemeAndEffect();
+        } catch (error) {
+            console.error("[FPTE] Failed to load patches:", error);
+
+            for (const unpatch of patches.splice(0).reverse()) {
+                try {
+                    unpatch();
+                } catch (err) {
+                    console.error("[FPTE] Failed to unpatch:", err);
+                }
+            }
+
+            loaded = false;
+        }
     },
+
     onUnload() {
-        patches.forEach(unpatch => {
-            unpatch();
-        });
+        if (!loaded) return;
+        loaded = false;
+
+        for (const unpatch of patches.splice(0).reverse()) {
+            try {
+                unpatch();
+            } catch (error) {
+                console.error("[FPTE] Failed to unpatch:", error);
+            }
+        }
+
         updateProfileThemeAndEffect();
     },
+
     settings: Settings
 };
